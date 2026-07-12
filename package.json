@@ -1,0 +1,26 @@
+{
+  "name": "files-convert",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n web,api -c blue,green \"npm:dev:web\" \"npm:dev:api\"",
+    "dev:web": "npm -w web run dev",
+    "dev:api": "npm run _api:uvicorn",
+    "_api:uvicorn": "services/converter/.venv/Scripts/python.exe -m uvicorn converter.main:app --reload --app-dir services --host 127.0.0.1 --port 8000",
+    "_api:uvicorn:unix": "services/converter/.venv/bin/python -m uvicorn converter.main:app --reload --app-dir services --host 127.0.0.1 --port 8000",
+    "setup:api": "python -m venv services/converter/.venv && services/converter/.venv/Scripts/python.exe -m pip install -U pip && services/converter/.venv/Scripts/python.exe -m pip install -r services/converter/requirements.txt",
+    "setup:api:optional": "services/converter/.venv/Scripts/python.exe -m pip install -r services/converter/requirements-optional.txt",
+    "setup:web": "npm install",
+    "setup": "npm run setup:web && npm run setup:api",
+    "build": "npm -w web run build",
+    "start": "npm -w web run start",
+    "typecheck": "npm -w web run typecheck",
+    "lint": "npm -w web run lint"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
