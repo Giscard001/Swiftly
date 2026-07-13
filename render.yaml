@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: swiftly-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    healthCheckPath: /health
+    envVars:
+      # Stockage temporaire (/tmp est inscriptible, éphémère en free tier)
+      # Les jobs.sqlite et storage/ seront recréés à chaque spin-up.
+      - key: CONV_STORAGE_DIR
+        value: /tmp/storage
+      # CORS : le regex *.vercel.app est en dur dans config.py (cors_origin_regex)
+      # Ajouter ici les origines explicites supplémentaires (ex: domaine custom).
+      - key: CONV_CORS_ORIGINS
+        value: http://localhost:3000
+      # Limite de taille (500 Mo adapté au 512 Mo RAM du free tier)
+      - key: CONV_MAX_FILE_SIZE
+        value: "524288000"
+      # Rate-limit par IP
+      - key: CONV_RATE_LIMIT
+        value: 30/minute
+      # Durée avant suppression automatique des fichiers (1h)
+      - key: CONV_RETENTION_SECONDS
+        value: "3600"
+    autoDeploy: true
