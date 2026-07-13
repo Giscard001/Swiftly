@@ -1,5 +1,5 @@
 export const CONVERTER_URL =
-  process.env.CONVERTER_URL || "http://127.0.0.1:8000";
+  process.env.NEXT_PUBLIC_CONVERTER_URL || "http://127.0.0.1:8000";
 
 export type CapabilityTarget = {
   category: string;
