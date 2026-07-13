@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Git
+.git/
+.gitignore
+
+# Frontend (déployé séparément sur Vercel)
+web/
+node_modules/
+
+# Storage temporaire (recréé au démarrage par l'application)
+storage/
+jobs.sqlite
+*.sqlite
+*.sqlite3
+
+# Environnement
+.env
+.env.local
+
+# IDE / OS
+.zcode/
+.vscode/
+.idea/
+*.log
