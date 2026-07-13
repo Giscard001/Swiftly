@@ -1,8 +1,9 @@
-FROM python:3.11-slim
+# On pinne sur bookworm (pas slim/trixie) : noms de paquets stables et LTS.
+# L'image full (pas slim) évite les paquets manquants pour WeasyPrint/cairo.
+FROM python:3.11-bookworm
 
 # ── Activer les sections contrib/non-free de Debian ─────────────────────────
 # Nécessaire car 'unrar' (extraction RAR) est dans non-free.
-# L'image slim n'inclut que 'main' par défaut → exit code 100 au build sans ceci.
 RUN { \
         [ -f /etc/apt/sources.list.d/debian.sources ] \
         && sed -i 's/Components: main/Components: main contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources ; \
@@ -17,6 +18,7 @@ RUN { \
 # libs WeasyPrint/cairosvg : HTML → PDF, SVG → image/PDF
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libreoffice-writer \
+    libreoffice-impress \
     ffmpeg \
     tesseract-ocr \
     tesseract-ocr-fra \
@@ -24,8 +26,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unrar \
     libpango-1.0-0 \
     libharfbuzz0b \
-    libgdk-pixbuf2.0-0 \
+    libgdk-pixbuf-2.0-0 \
     libcairo2 \
+    shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
