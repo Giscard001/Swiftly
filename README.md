@@ -199,9 +199,60 @@ Voir `.env.example` (`CONV_MAX_FILE_SIZE`). Par défaut : 2 Go / fichier. Usage 
 | `CONV_CORS_ORIGINS` | api | `http://localhost:3000` | Origines CORS (CSV) |
 | `CONV_MAX_FILE_SIZE` | api | `2147483648` (2 Go) | Taille max par fichier |
 | `CONV_RATE_LIMIT` | api | `30/minute` | Rate-limit par IP (format slowapi) |
-| `CONVERTER_URL` | web | `http://127.0.0.1:8000` | URL du microservice |
+| `NEXT_PUBLIC_CONVERTER_URL` | web | `http://127.0.0.1:8000` | URL du backend (exposée au navigateur) |
+| `CONVERTER_URL` | web | `http://127.0.0.1:8000` | URL du backend (usage serveur uniquement) |
 
 ## Notes sur le dev
 
 - `npm run dev:api` lance uvicorn avec `--reload` : la DB `jobs.sqlite` persiste mais les jobs en cours sont perdus à une recharge (worker en mémoire). Acceptable en dev.
 - `--app-dir services` + target `converter.main:app` : nécessaire car les imports sont relatifs (`from . import jobs`).
+
+## Déploiement (Vercel + Render)
+
+L'architecture déploie le frontend et le backend sur deux plateformes séparées :
+
+```
+Navigateur ──HTTPS──► Next.js (Vercel, gratuit) ──► FastAPI (Render Docker, free tier)
+```
+
+### Backend — Render (Docker)
+
+Le `Dockerfile` installe tous les binaires (LibreOffice, FFmpeg, Tesseract, poppler, unrar, libs WeasyPrint/cairosvg). Le `render.yaml` (Blueprint) est détecté automatiquement par Render à l'import du repo.
+
+**Étapes :**
+1. Sur [render.com](https://render.com) → **New** → **Blueprint** → connecter le repo GitHub `Swiftly`
+2. Render détecte `render.yaml` et propose le service `swiftly-api` → **Apply**
+3. L'image Docker est construite (~3-5 min avec LibreOffice)
+4. Une fois déployé, noter l'URL (ex : `https://swiftly-api.onrender.com`)
+
+**Limites free tier :**
+- Le filesystem est **éphémère** : `storage/` et `jobs.sqlite` sont recréés à chaque spin-up (les jobs en cours sont perdus après 15 min d'inactivité)
+- Taille max : 500 Mo (adapté à la RAM limitée du free tier)
+- Spin-down après 15 min d'inactivité, réveil ~1 min
+- **Amélioration future** : Render Starter (~7 $/mois) + disque persistant 1 Go pour conserver les fichiers entre les redéploiements
+
+### Frontend — Vercel
+
+**Étapes :**
+1. Sur [vercel.com](https://vercel.com) → **New Project** → importer le repo `Swiftly`
+2. **Root Directory** : cocher `web/` (le backend n'est pas dans l'image Next.js)
+3. **Environment Variables** → ajouter :
+   - `NEXT_PUBLIC_CONVERTER_URL` = l'URL du backend Render (ex : `https://swiftly-api.onrender.com`)
+   - Scoper à **Production + Preview + Development**
+4. **Deploy** — Vercel build le frontend Next.js
+
+Le frontend appelle le backend directement depuis le navigateur. Le CORS est configuré :
+- Origines explicites via `CONV_CORS_ORIGINS`
+- Regex automatique pour toutes les URLs `*.vercel.app` (configuré dans `config.py`)
+
+### Vérifier le déploiement
+
+```bash
+# Backend (sur l'URL Render) :
+curl https://swiftly-api.onrender.com/health
+# => {"status":"ok","service":"converter"}
+
+curl https://swiftly-api.onrender.com/capabilities | python -m json.tool | head -5
+
+# Frontend : ouvrir https://swiftly.vercel.app
+```
