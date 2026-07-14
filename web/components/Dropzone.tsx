@@ -6,28 +6,30 @@ import { detectExt, formatBytes } from "@/lib/utils";
 import { isImageExt } from "@/lib/media";
 
 type Props = {
-  onFiles: (files: File[]) => void;
+  /** Liste des fichiers contrôlée par le parent (source de vérité). */
+  files: File[];
+  /** Callback pour mettre à jour la liste (ajout, remplacement, suppression). */
+  onFilesChange: (files: File[]) => void;
   multiple?: boolean;
   accept?: string;
 };
 
-export function Dropzone({ onFiles, multiple = true, accept }: Props) {
+export function Dropzone({ files, onFilesChange, multiple = true, accept }: Props) {
   const [drag, setDrag] = useState(false);
-  const [files, setFiles] = useState<File[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handle = useCallback(
+  const add = useCallback(
     (list: FileList | null) => {
       if (!list || list.length === 0) return;
       const arr = Array.from(list);
-      setFiles((prev) => (multiple ? [...prev, ...arr] : [arr[0]]));
-      onFiles(arr);
+      // multiple : on ajoute aux existants ; sinon on remplace.
+      onFilesChange(multiple ? [...files, ...arr] : [arr[0]]);
     },
-    [multiple, onFiles]
+    [files, multiple, onFilesChange]
   );
 
   const remove = (i: number) => {
-    setFiles((prev) => prev.filter((_, idx) => idx !== i));
+    onFilesChange(files.filter((_, idx) => idx !== i));
   };
 
   return (
@@ -41,7 +43,7 @@ export function Dropzone({ onFiles, multiple = true, accept }: Props) {
         onDrop={(e) => {
           e.preventDefault();
           setDrag(false);
-          handle(e.dataTransfer.files);
+          add(e.dataTransfer.files);
         }}
         onClick={() => inputRef.current?.click()}
         className={`group relative flex cursor-pointer flex-col items-center justify-center gap-4 overflow-hidden rounded-2xl border-2 border-dashed p-12 text-center transition-all duration-200 ${
@@ -72,7 +74,7 @@ export function Dropzone({ onFiles, multiple = true, accept }: Props) {
           multiple={multiple}
           accept={accept}
           onChange={(e) => {
-            handle(e.target.files);
+            add(e.target.files);
             e.currentTarget.value = "";
           }}
         />
@@ -111,8 +113,8 @@ export function Dropzone({ onFiles, multiple = true, accept }: Props) {
 
 export function useDropzoneFiles() {
   const [files, setFiles] = useState<File[]>([]);
-  const onFiles = useCallback((arr: File[]) => setFiles(arr), []);
-  return { files, onFiles };
+  const onFilesChange = useCallback((arr: File[]) => setFiles(arr), []);
+  return { files, onFilesChange };
 }
 
 function Thumb({ file }: { file: File }) {

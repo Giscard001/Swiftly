@@ -103,7 +103,8 @@ export default function ToolsPage() {
             </div>
 
             <Dropzone
-              onFiles={(arr) => setFiles((prev) => [...prev, ...arr])}
+              files={files}
+              onFilesChange={setFiles}
               multiple={tool.id === "merge"}
               accept={tool.accept}
             />

@@ -100,7 +100,7 @@ export default function HomePage() {
         </section>
 
         <section className="mx-auto mt-12 max-w-3xl" style={{ animationDelay: "60ms" }}>
-          <Dropzone onFiles={(arr) => setFiles((prev) => [...prev, ...arr])} />
+          <Dropzone files={files} onFilesChange={setFiles} />
 
           {primaryFile && (
             <div className="card mt-6 p-6 animate-fade-in-up">
