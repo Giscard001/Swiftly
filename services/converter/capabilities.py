@@ -2,9 +2,9 @@ import importlib
 import shutil
 
 from .config import settings
-from .engines import archives, av, data, images, markdown_engine, ocr_pdf, office, ocr, pdf_engine, pdf_images, pdf_office
+from .engines import archives, av, data, images, markdown_engine, ocr_pdf, office, office_bridge, ocr, pdf_engine, pdf_images, pdf_office
 
-_ENGINES = [images, pdf_engine, pdf_images, pdf_office, ocr_pdf, markdown_engine, data, archives, office, av, ocr]
+_ENGINES = [images, pdf_engine, pdf_images, pdf_office, ocr_pdf, markdown_engine, data, archives, office, office_bridge, av, ocr]
 
 
 def probe_binaries() -> dict:
