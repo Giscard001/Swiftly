@@ -41,7 +41,10 @@ def routes() -> list[ConversionRoute]:
 
 def _docx_to_pptx(ctx: ConvertContext) -> None:
     """Word -> PowerPoint : un slide par titre de section + ses paragraphes.
-    Si le document n'a pas de titres, on crée un slide par groupe de paragraphes."""
+    Construction 100% contrôlée (layout vierge + textboxes) pour éviter le
+    chevauchement de texte des placeholders de template par défaut."""
+    from pptx.enum.text import MSO_AUTO_SIZE, PP_ALIGN
+
     ctx.set_progress(10, "Lecture du document Word")
     doc = Document(str(ctx.input_path))
 
@@ -58,11 +61,14 @@ def _docx_to_pptx(ctx: ConvertContext) -> None:
 
     ctx.set_progress(30, "Construction des slides")
     prs = Presentation()
-    # Utilise le layout par défaut "Title and Content" (index 1) s'il existe, sinon blank (6)
-    title_layout = prs.slide_layouts[1] if len(prs.slide_layouts) > 1 else prs.slide_layouts[6]
-    blank_layout = prs.slide_layouts[6] if len(prs.slide_layouts) > 6 else prs.slide_layouts[0]
+    # Force 16:9 pour avoir de la place (13.33 x 7.5 pouces par défaut en EMU)
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    SW, SH = prs.slide_width, prs.slide_height
+    # Layout vierge (index 6 dans le template par défaut python-pptx)
+    blank_layout = prs.slide_layouts[6]
 
-    # Groupe les paragraphes : un nouveau slide démarre à chaque titre (ou tous les ~6 paragraphes)
+    # Groupe les paragraphes : un nouveau slide démarre à chaque titre
     slides_content: list[tuple[str, list[str]]] = []
     current_title = ""
     current_body: list[str] = []
@@ -75,8 +81,8 @@ def _docx_to_pptx(ctx: ConvertContext) -> None:
             current_body = []
         else:
             current_body.append(text)
-            # découpe les longues sections sans titre
-            if len(current_body) >= 8 and not is_heading:
+            # découpe les longues sections sans titre (limite par slide)
+            if len(current_body) >= 6:
                 slides_content.append((current_title, current_body))
                 current_title = ""
                 current_body = []
@@ -84,29 +90,47 @@ def _docx_to_pptx(ctx: ConvertContext) -> None:
         slides_content.append((current_title, current_body))
 
     if not slides_content:
-        slides_content = [("", [p[0] for p in paragraphs[:10]])]
+        slides_content = [("", [p[0] for p in paragraphs[:6]])]
 
     total = len(slides_content)
     for i, (title, body) in enumerate(slides_content):
-        layout = title_layout if title else blank_layout
-        slide = prs.slides.add_slide(layout)
-        # Place le titre
-        if slide.shapes.title:
-            slide.shapes.title.text = title[:200] or f"Section {i + 1}"
-        # Place le corps dans le premier placeholder de contenu (ou une zone de texte)
-        body_text = "\n".join(body)[:1500]
-        if body_text:
-            content_ph = None
-            for ph in slide.placeholders:
-                if ph.placeholder_format.idx == 1:  # placeholder "body"
-                    content_ph = ph
-                    break
-            if content_ph:
-                content_ph.text = body_text
-            else:
-                # fallback : ajouter une textbox
-                txBox = slide.shapes.add_textbox(Inches(0.5), Inches(1.5), Inches(9), Inches(5))
-                txBox.text_frame.text = body_text
+        slide = prs.slides.add_slide(blank_layout)
+
+        # ── Zone de titre (en haut, pleine largeur) ───────────────────────
+        if title:
+            tbox = slide.shapes.add_textbox(
+                Inches(0.5), Inches(0.4), SW - Inches(1.0), Inches(1.1)
+            )
+            tf = tbox.text_frame
+            tf.word_wrap = True
+            tf.auto_size = MSO_AUTO_SIZE.NONE  # taille fixe, on wrap le texte
+            p = tf.paragraphs[0]
+            p.alignment = PP_ALIGN.LEFT
+            run = p.add_run()
+            run.text = title[:200]
+            run.font.size = Pt(32)
+            run.font.bold = True
+
+        # ── Zone de corps (sous le titre, pleine largeur) ─────────────────
+        if body:
+            bbox = slide.shapes.add_textbox(
+                Inches(0.6),
+                Inches(1.8) if title else Inches(0.6),
+                SW - Inches(1.2),
+                SH - (Inches(2.2) if title else Inches(1.0)),
+            )
+            tf = bbox.text_frame
+            tf.word_wrap = True
+            tf.auto_size = MSO_AUTO_SIZE.NONE
+            # Chaque paragraphe du docx = un paragraphe PPT séparé
+            for j, line in enumerate(body[:20]):  # plafond anti-débordement
+                p = tf.paragraphs[0] if j == 0 else tf.add_paragraph()
+                p.alignment = PP_ALIGN.LEFT
+                p.space_after = Pt(6)
+                run = p.add_run()
+                run.text = line[:400]
+                run.font.size = Pt(18)
+
         ctx.set_progress(int(30 + 65 * (i + 1) / max(total, 1)), f"Slide {i + 1}/{total}")
 
     ctx.set_progress(98, "Enregistrement")
