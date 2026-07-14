@@ -49,13 +49,31 @@ def routes() -> list[ConversionRoute]:
 
 
 def _pdf_to_txt(ctx: ConvertContext) -> None:
+    """PDF -> texte. Privilégie pdfplumber (extraction plus propre) avec
+    fallback pypdf si pdfplumber n'est pas disponible."""
     ctx.set_progress(10, "Lecture du PDF")
-    reader = pypdf.PdfReader(str(ctx.input_path))
-    n = len(reader.pages)
     parts: list[str] = []
-    for i, page in enumerate(reader.pages):
-        parts.append(page.extract_text() or "")
-        ctx.set_progress(int(10 + 85 * (i + 1) / max(n, 1)), f"Page {i + 1}/{n}")
+    try:
+        import pdfplumber
+
+        with pdfplumber.open(str(ctx.input_path)) as pdf:
+            n = len(pdf.pages)
+            for i, page in enumerate(pdf.pages):
+                try:
+                    parts.append(page.extract_text() or "")
+                except Exception:
+                    parts.append("")
+                ctx.set_progress(int(10 + 85 * (i + 1) / max(n, 1)), f"Page {i + 1}/{n}")
+    except Exception:
+        parts.clear()
+        reader = pypdf.PdfReader(str(ctx.input_path))
+        n = len(reader.pages)
+        for i, page in enumerate(reader.pages):
+            try:
+                parts.append(page.extract_text() or "")
+            except Exception:
+                parts.append("")
+            ctx.set_progress(int(10 + 85 * (i + 1) / max(n, 1)), f"Page {i + 1}/{n}")
     ctx.output_path.write_text("\n".join(parts), encoding="utf-8")
     ctx.set_progress(100, "Termine")
 
@@ -86,12 +104,40 @@ def _html_to_pdf(ctx: ConvertContext) -> None:
 
 
 def _pdf_to_html(ctx: ConvertContext) -> None:
-    """PDF -> HTML via pypdf : extraction du texte, une <section> par page.
-    Rendu basique (pas de mise en forme avancée) mais sans binaire externe."""
-    ctx.set_progress(10, "Lecture du PDF")
-    reader = pypdf.PdfReader(str(ctx.input_path))
-    n = len(reader.pages)
+    """PDF -> HTML via pdfplumber (préféré) ou pypdf (fallback).
+    pdfplumber extrait un texte beaucoup plus propre que pypdf sur les PDF
+    complexes (encodages CID, polices embarquées) → évite les caractères bizarres."""
     import html as _html
+
+    ctx.set_progress(10, "Lecture du PDF")
+    pages_text: list[str] = []
+    n = 0
+
+    # Tente pdfplumber d'abord (meilleure qualité d'extraction)
+    try:
+        import pdfplumber
+
+        with pdfplumber.open(str(ctx.input_path)) as pdf:
+            n = len(pdf.pages)
+            for i, page in enumerate(pdf.pages):
+                try:
+                    text = page.extract_text() or ""
+                except Exception:
+                    text = ""
+                pages_text.append(text)
+                ctx.set_progress(int(10 + 85 * (i + 1) / max(n, 1)), f"Page {i + 1}/{n}")
+    except Exception:
+        # Fallback pypdf si pdfplumber absent ou erreur
+        pages_text.clear()
+        reader = pypdf.PdfReader(str(ctx.input_path))
+        n = len(reader.pages)
+        for i, page in enumerate(reader.pages):
+            try:
+                text = page.extract_text() or ""
+            except Exception:
+                text = ""
+            pages_text.append(text)
+            ctx.set_progress(int(10 + 85 * (i + 1) / max(n, 1)), f"Page {i + 1}/{n}")
 
     parts = [
         "<!DOCTYPE html>",
@@ -102,12 +148,10 @@ def _pdf_to_html(ctx: ConvertContext) -> None:
         'border:1px solid #ddd;border-radius:6px;white-space:pre-wrap}</style>',
         "</head><body>",
     ]
-    for i, page in enumerate(reader.pages):
-        text = page.extract_text() or ""
+    for i, text in enumerate(pages_text):
         parts.append(f'<section class="page" id="page-{i + 1}">')
         parts.append(_html.escape(text))
         parts.append("</section>")
-        ctx.set_progress(int(10 + 85 * (i + 1) / max(n, 1)), f"Page {i + 1}/{n}")
     parts.append("</body></html>")
     ctx.output_path.write_text("\n".join(parts), encoding="utf-8")
     ctx.set_progress(100, "Termine")
